@@ -93,34 +93,39 @@ app.post('/api/chat', async (req, res) => {
     const aiContent = JSON.parse(rawContent);
 
     // Fetch Audio from ElevenLabs
-    if (aiContent.message && process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID) {
-      try {
-        const ttsRes = await axios.post(
-          `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
-          {
-            text: aiContent.message,
-            model_id: 'eleven_monolingual_v1',
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.75
-            }
-          },
-          {
-            headers: {
-              'Accept': 'audio/mpeg',
-              'xi-api-key': process.env.ELEVENLABS_API_KEY,
-              'Content-Type': 'application/json'
-            },
-            responseType: 'arraybuffer'
-          }
-        );
-
-        aiContent.audioBase64 = Buffer.from(ttsRes.data, 'binary').toString('base64');
-      } catch (ttsErr) {
-        console.error('ElevenLabs Audio Error:', ttsErr.message);
+if (aiContent.message && process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID) {
+  try {
+    const ttsRes = await axios.post(
+      `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID.trim()}`,
+      {
+        text: aiContent.message,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      },
+      {
+        headers: {
+          'Accept': 'audio/mpeg',
+          'xi-api-key': process.env.ELEVENLABS_API_KEY.trim(),
+          'Content-Type': 'application/json'
+        },
+        responseType: 'arraybuffer'
       }
-    }
+    );
 
+    aiContent.audioBase64 = Buffer.from(ttsRes.data, 'binary').toString('base64');
+  } catch (ttsErr) {
+    // Detailed error logging for future 400 issues
+    if (ttsErr.response && ttsErr.response.data) {
+      const errDetail = Buffer.from(ttsErr.response.data).toString('utf-8');
+      console.error('ElevenLabs Audio Error Details:', errDetail);
+    } else {
+      console.error('ElevenLabs Audio Error:', ttsErr.message);
+    }
+  }
+}
     return res.json(aiContent);
   } catch (error) {
     console.error('Error communicating with backend:', error);
