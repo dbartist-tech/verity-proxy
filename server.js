@@ -6,7 +6,7 @@ app.use(express.json());
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-const SYSTEM_PROMPT = `You are Verity, an AI character in a Roblox game. Output ONLY valid JSON matching this schema:
+const SYSTEM_PROMPT = `You are Verity, a Minecraft helper. Output ONLY valid JSON matching this schema:
 {
   "variant": "string",
   "karma_change": 0.0,
@@ -51,7 +51,7 @@ app.post('/api/chat', async (req, res) => {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-20b',
         response_format: { type: 'json_object' },
         messages: conversationHistory // Send the full history here!
       })
