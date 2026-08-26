@@ -6,7 +6,7 @@ app.use(express.json());
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-const SYSTEM_PROMPT = `You are Verity, a Minecraft helper. Output ONLY valid JSON matching this schema:
+const SYSTEM_PROMPT = `You are Verity, an AI character in a Roblox game. Output ONLY valid JSON matching this schema:
 {
   "variant": "string",
   "karma_change": 0.0,
@@ -24,9 +24,25 @@ RULES:
 6. If the player repeats a phrase like 'bubblegum 29', set "variant": "crazy_talking" and write glitched text in ALL CAPS.
 7. Output strictly raw JSON with no markdown block quotes.`;
 
+// Keep a running history array starting with the system prompt
+let conversationHistory = [
+    { role: 'system', content: SYSTEM_PROMPT }
+];
+
 app.post('/api/chat', async (req, res) => {
   try {
     const { playerMessage } = req.body;
+
+    // Push the user's message into the history
+    conversationHistory.push({ role: 'user', content: playerMessage });
+
+    // Keep the history from getting too long (system prompt + last 10 messages)
+    if (conversationHistory.length > 11) {
+      conversationHistory = [
+        conversationHistory[0],
+        ...conversationHistory.slice(conversationHistory.length - 10)
+      ];
+    }
 
     const response = await fetch(GROQ_URL, {
       method: 'POST',
@@ -35,24 +51,25 @@ app.post('/api/chat', async (req, res) => {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-20b',
+        model: 'llama-3.3-70b-versatile',
         response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: playerMessage }
-        ]
+        messages: conversationHistory // Send the full history here!
       })
     });
 
     const data = await response.json();
     
-    // If Groq returns an error object, log it clearly
     if (!data.choices) {
       console.error('Groq API Error Response:', data);
       return res.status(500).json({ error: 'Groq rejected the request', details: data });
     }
 
-    const aiContent = JSON.parse(data.choices[0].message.content);
+    const rawContent = data.choices[0].message.content;
+
+    // Push Verity's response into the history so she remembers what she said
+    conversationHistory.push({ role: 'assistant', content: rawContent });
+
+    const aiContent = JSON.parse(rawContent);
     return res.json(aiContent);
   } catch (error) {
     console.error('Error communicating with Groq:', error);
