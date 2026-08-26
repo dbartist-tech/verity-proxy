@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const axios = require('axios');
 
 const app = express();
 app.use(express.json());
@@ -53,13 +54,11 @@ app.post('/api/chat', async (req, res) => {
     const { playerMessage, playerName } = req.body;
     const pName = playerName || 'Unknown';
 
-    // Retrieve the specific player's conversation history
     let history = getPlayerHistory(pName);
 
     const formattedMessage = `[Player Name: ${pName}] says: ${playerMessage}`;
     history.push({ role: 'user', content: formattedMessage });
 
-    // Limit memory per player (System prompt + last 10 messages)
     if (history.length > 11) {
       playerHistories[pName] = [
         history[0],
@@ -71,7 +70,7 @@ app.post('/api/chat', async (req, res) => {
     const response = await fetch(GROQ_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'Application/json',
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
@@ -92,9 +91,39 @@ app.post('/api/chat', async (req, res) => {
     history.push({ role: 'assistant', content: rawContent });
 
     const aiContent = JSON.parse(rawContent);
+
+    // Fetch Audio from ElevenLabs
+    if (aiContent.message && process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID) {
+      try {
+        const ttsRes = await axios.post(
+          `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
+          {
+            text: aiContent.message,
+            model_id: 'eleven_monolingual_v1',
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75
+            }
+          },
+          {
+            headers: {
+              'Accept': 'audio/mpeg',
+              'xi-api-key': process.env.ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json'
+            },
+            responseType: 'arraybuffer'
+          }
+        );
+
+        aiContent.audioBase64 = Buffer.from(ttsRes.data, 'binary').toString('base64');
+      } catch (ttsErr) {
+        console.error('ElevenLabs Audio Error:', ttsErr.message);
+      }
+    }
+
     return res.json(aiContent);
   } catch (error) {
-    console.error('Error communicating with Groq:', error);
+    console.error('Error communicating with backend:', error);
     return res.status(500).json({ error: 'Failed to process AI request' });
   }
 });
